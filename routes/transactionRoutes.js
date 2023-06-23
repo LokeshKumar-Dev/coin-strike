@@ -5,7 +5,7 @@ const dayjs = require("dayjs");
 
 const { protect, admin } = require("../Middleware/AuthMiddleware.js");
 const Transaction = require("./../Models/transactionModel.js");
-const User = require("./../Models/UserModel.js");
+const User = require("./../Models/userModel.js");
 
 const tranRouter = express.Router();
 
