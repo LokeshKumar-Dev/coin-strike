@@ -15,20 +15,20 @@ const transactionSchema = mongoose.Schema(
       type: String,
     },
     amount: {
-      type: String,
+      type: Number,
       required: true,
     },
     category: {
       type: String,
-      required: true,
     },
     type: {
       type: String,
       required: true,
       enum: ["income", "expense", "subscription"],
     },
-    period: {
-      type: Number,
+    cycle: {
+      type: String,
+      enum: ["monthly", "quarterly", "annual"],
     },
     status: {
       type: Boolean,
@@ -42,7 +42,7 @@ const transactionSchema = mongoose.Schema(
       set: function (value) {
         // Extracting the date portion
         const [year, month, day, hour, minute, second] = value.split(":");
-        const newDate = new Date(year, month - 1, day, hour, minute, second);
+        const newDate = new Date(year, month, day, hour, minute, second);
 
         return newDate;
       },

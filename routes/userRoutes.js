@@ -10,6 +10,17 @@ const User = require("./../Models/UserModel.js");
 
 const userRouter = express.Router();
 
+//==================CHART ROUTES==================
+
+userRouter.get("/chart/line", protect, async (req, res) => {
+  const user = await User.findById(req.user._id);
+  res.json({
+    incomeList: user.incomeList,
+    expenseList: user.expenseList,
+  });
+});
+
+//==================USER ROUTES==================
 // Delete
 userRouter.delete(
   "/:id",
@@ -39,6 +50,8 @@ userRouter.post(
       res.json({
         _id: user._id,
         name: user.name,
+        incomeList: user.incomeList,
+        expenseList: user.expenseList,
         email: user.email,
         image: user.image,
         isVerified: user.isVerified,
@@ -46,7 +59,7 @@ userRouter.post(
         createdAt: user.createdAt,
       });
     } else {
-      res.status(401);
+      res.status(401).send("Invalid Email or Password");
       throw new Error("Invalid Email or Password");
     }
   })
@@ -56,12 +69,12 @@ userRouter.post(
 userRouter.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { name, email, password } = req.body;
+    const { email, password } = req.body;
 
     const userExists = await User.findOne({ email });
 
     if (userExists) {
-      res.status(400);
+      res.status(400).send("Email already exists");
       throw new Error("User already exists");
     }
 
@@ -69,59 +82,58 @@ userRouter.post(
     var otpGen = Math.floor(1000 + Math.random() * 9000);
     console.log(otpGen);
 
-    // let config = {
-    //   service: "gmail",
-    //   auth: {
-    //     user: process.env.EMAIL,
-    //     pass: process.env.PASSWORD,
-    //   },
-    // };
+    let config = {
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL,
+        pass: process.env.PASSWORD,
+      },
+    };
 
-    // let transporter = nodemailer.createTransport(config);
+    let transporter = nodemailer.createTransport(config);
 
-    // let MailGenerator = new Mailgen({
-    //   theme: "default",
-    //   product: {
-    //     name: "The CoinStriker Team",
-    //     link: "https://papaya-daffodil-e225e7.netlify.app/",//--------------------EDIT LINK
-    //   },
-    // });
-    // let response = {
-    //   body: {
-    //     name: `${email}`,
-    //     intro: `Please enter the code on the sign up page to confirm your identity: ${otpGen}`,
-    //     outro: "All the best,\n The CoinStriker Team",
-    //   },
-    // };
+    let MailGenerator = new Mailgen({
+      theme: "default",
+      product: {
+        name: "The CoinStriker Team",
+        link: "https://papaya-daffodil-e225e7.netlify.app/", //--------------------EDIT LINK
+      },
+    });
+    let response = {
+      body: {
+        name: `${email}`,
+        intro: `Please enter the code on the sign up page to confirm your identity: ${otpGen}`,
+        outro: "All the best,\n The CoinStriker Team",
+      },
+    };
 
-    // let mail = MailGenerator.generate(response);
+    let mail = MailGenerator.generate(response);
 
-    // let message = {
-    //   from: process.env.EMAIL,
-    //   to: email,
-    //   subject: "Otp CoinStriker",
-    //   html: mail,
-    // };
+    let message = {
+      from: process.env.EMAIL,
+      to: email,
+      subject: "Otp CoinStriker",
+      html: mail,
+    };
 
-    // await transporter.sendMail(message).catch((error) => {
-    //   res.status(500);
-    //   throw new Error("Internal Server Error");
-    // });
+    await transporter.sendMail(message).catch((error) => {
+      res.status(500).send("Internal Server Error");
+      throw new Error("Internal Server Error");
+    });
 
     const salt = await bcrypt.genSalt(10);
     otpGen = await bcrypt.hash(otpGen.toString(), salt);
 
     // USER CREATING PHASE
     const user = await User.create({
-      name,
       email,
       password,
       otp: otpGen,
     });
     if (user) {
-      res.status(300).send("Now verify to continue");
+      res.status(200).json({ msg: "Now verify to continue", id: user._id });
     } else {
-      res.status(400);
+      res.status(400).send("Invalid User Data");
       throw new Error("Invalid User Data");
     }
   })
@@ -140,6 +152,8 @@ userRouter.post(
       res.json({
         _id: user._id,
         name: user.name,
+        incomeList: user.incomeList,
+
         email: user.email,
         image: user.image,
         isVerified: true,
@@ -147,7 +161,7 @@ userRouter.post(
         createdAt: user.createdAt,
       });
     } else {
-      res.status(401);
+      res.status(401).send("Invalid Otp Number");
       throw new Error("Invalid Otp Number");
     }
   })
@@ -164,10 +178,16 @@ userRouter.get(
       res.json({
         _id: user._id,
         name: user.name,
+        incomeList: user.incomeList,
+        expenseList: user.expenseList,
         email: user.email,
         image: user.image,
         isVerified: user.isVerified,
         createdAt: user.createdAt,
+        currency: user.currency,
+        expense: user.expense,
+        income: user.income,
+        balance: user.income - user.expense,
       });
     } else {
       res.status(404);
@@ -185,7 +205,11 @@ userRouter.put(
 
     if (user) {
       user.name = req.body.name || user.name;
-      user.email = req.body.email || user.email;
+      user.lastname = req.body.lastname || user.lastname;
+      user.image = req.body.image || user.image;
+      user.currency = req.body.currency || user.currency;
+      user.salary = req.body.salary || user.salary;
+      user.date = req.body.date || user.date;
       if (req.body.password) {
         user.password = req.body.password;
       }
@@ -196,7 +220,14 @@ userRouter.put(
         image: updatedUser.image,
         email: updatedUser.email,
         createdAt: updatedUser.createdAt,
-        token: generateToken(updatedUser._id),
+        incomeList: updatedUser.incomeList,
+        expenseList: updatedUser.expenseList,
+        isVerified: updatedUser.isVerified,
+        createdAt: updatedUser.createdAt,
+        currency: updatedUser.currency,
+        expense: updatedUser.expense,
+        income: updatedUser.income,
+        balance: updatedUser.income - updatedUser.expense,
       });
     } else {
       res.status(404);
@@ -289,6 +320,19 @@ userRouter.post(
       .catch((error) => {
         return res.status(500).json({ error });
       });
+  })
+);
+
+userRouter.get(
+  "/ie",
+  protect,
+  asyncHandler(async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id);
+      res.json({ income: user.income, expense: user.expense });
+    } catch (error) {
+      res.status(500).json({ error });
+    }
   })
 );
 
