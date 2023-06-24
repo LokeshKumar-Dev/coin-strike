@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// Creating the schema for the transaction model fields of user id, name, description, amount, category, type, cycle, status, auto, and date
 const transactionSchema = mongoose.Schema(
   {
     user: {

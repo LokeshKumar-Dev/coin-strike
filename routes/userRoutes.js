@@ -11,7 +11,7 @@ const User = require("./../Models/userModel.js");
 const userRouter = express.Router();
 
 //==================CHART ROUTES==================
-
+//Send User Income List and Expense List Chart
 userRouter.get("/chart/line", protect, async (req, res) => {
   const user = await User.findById(req.user._id);
   res.json({

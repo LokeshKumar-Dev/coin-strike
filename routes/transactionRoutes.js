@@ -9,12 +9,14 @@ const User = require("./../Models/userModel.js");
 
 const tranRouter = express.Router();
 
+//Update user's income by amount
 const userIncomeUpdate = async (req, amount) => {
   try {
     await User.findOneAndUpdate(
       { _id: req.user._id },
       {
         $inc: { income: amount },
+        //Chatgpt suggestion of updating incomeList by month
         $set: { [`incomeList.${dayjs().month()}`]: req.user.income + amount },
       },
       { new: true }
@@ -26,6 +28,7 @@ const userIncomeUpdate = async (req, amount) => {
   }
 };
 
+//Update user's expense by amount
 const userExpenseUpdate = async (req, amount) => {
   try {
     await User.findOneAndUpdate(
@@ -43,13 +46,15 @@ const userExpenseUpdate = async (req, amount) => {
 
 //==================ENTRY ROUTES==================
 
-// Add Entry
+// POST Entry on transaction model
 tranRouter.post(
   "/",
   protect,
   asyncHandler(async (req, res) => {
     try {
+      // get all data of name, amount, date, category, type, description from req.body
       const { name, amount, date, category, type, description } = req.body;
+      // create a new entry in transaction model
       const data = await Transaction.create({
         name,
         amount,
@@ -60,11 +65,15 @@ tranRouter.post(
         description,
       });
 
+      //update overall income and expense of user
+      //if type is income then update income else update expense
       if (type === "income") {
+        //params are req, amount, isIncome
         await userIncomeUpdate(req, amount, true);
       } else {
         await userExpenseUpdate(req, amount, true);
       }
+      //send response
       res.status(200).json({
         msg: "inserted Success",
         data,
@@ -75,13 +84,16 @@ tranRouter.post(
   })
 );
 
-//GET Entry
+//Send all entries from transaction model by user id and type of income or expense
+//and add pagination with limit of 10 entries per page
 tranRouter.get(
   "/",
   protect,
   asyncHandler(async (req, res) => {
     try {
+      //get page number and limit from query
       const { page = 1, limit } = req.query;
+      //calculate total number of transactions
       const totalTransactions = await Transaction.countDocuments({
         $and: [
           { user: req.user._id },
@@ -95,10 +107,7 @@ tranRouter.get(
         // Calculate total number of pages
         totalPages = Math.ceil(totalTransactions / limit);
       }
-      //Date Sorting
-      // const obj = await Transaction.find({ user: req.user._id }).sort({
-      //   date: -1,
-      // });
+      //find all entries by user id and type of income or expense
       const obj = await Transaction.find({
         $and: [
           { user: req.user._id },
@@ -106,17 +115,19 @@ tranRouter.get(
             $or: [{ type: "expense" }, { type: "income" }],
           },
         ],
-      })
+      }) //sort by date in descending order
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit);
+
+      //send response
       res.status(200).json({
         msg: "inserted Success",
         data: {
           entries: obj,
           page: 1,
           pages: totalPages,
-          total: totalTransactions,
+          total: totalTransactions, //for the antd pagination
         },
       });
     } catch (err) {
@@ -125,13 +136,17 @@ tranRouter.get(
   })
 );
 
-//GET Sort Entry
+//Send all entries from transaction model by user id and type of income or expense
+//same pagination as above
+//get query of sortBy and sortOrder to sort entries by name, amount, date, category
 tranRouter.get(
   "/sorted?",
-  protect,
+  protect, //added by me
   asyncHandler(async (req, res) => {
     try {
+      //get page number and limit from query
       const { page = 1, limit } = req.query;
+      //calculate total number of transactions
       const totalTransactions = await Transaction.countDocuments({
         $and: [
           { user: req.user._id },
@@ -140,15 +155,11 @@ tranRouter.get(
           },
         ],
       });
-      const totalPages = 1;
+      var totalPages = 1;
       if (totalTransactions > 10) {
         // Calculate total number of pages
         totalPages = Math.ceil(totalTransactions / limit);
       }
-      //Date Sorting
-      // const obj = await Transaction.find({ user: req.user._id }).sort({
-      //   date: -1,
-      // });
       const { sortBy, sortOrder } = req.query;
       const obj = await Transaction.find({
         $and: [
@@ -176,15 +187,22 @@ tranRouter.get(
   })
 );
 
-// UPDATE Entry
+//Update entry's name, amount, date, category, type, description using id pass in params
 tranRouter.put(
   "/:id",
   protect,
   asyncHandler(async (req, res) => {
     try {
       const transaction = await Transaction.findById(req.params.id);
+      //Check if transaction exists to avoid error
       if (transaction) {
+        //update all entries with new data from req.body
+        //if data is not present then use old data
+        // name, amount, date, category, type, description
         transaction.name = req.body.name || transaction.name;
+
+        //Check if amount is changed and not equal to old amount then update income or expense
+        //if change then calculate difference of old and new amount and update income or expense
         const flagAmount = transaction.amount !== req.body.amount;
         const diff = flagAmount
           ? req.body.amount - parseInt(transaction.amount)
@@ -194,15 +212,18 @@ tranRouter.put(
         transaction.description =
           req.body.description || transaction.description;
         transaction.category = req.body.category || transaction.category;
+
+        //Check if type is changed and not equal to old type then update income or expense
         const flagType = transaction.type !== req.body.type;
         transaction.type = req.body.type || transaction.type;
 
-        //DATE update
         if (req.body.date) {
           transaction.date = req.body.date;
         }
         // console.log(req.body);
+        //Now save the updated entry in transaction model
         const updatedEntry = await transaction.save(); //Save
+        //update user income or expense with difference amount by flagType and flagAmount
         if (flagType) {
           if (transaction.type === "income") {
             await userIncomeUpdate(req, parseInt(transaction.amount));
@@ -211,14 +232,14 @@ tranRouter.put(
             await userIncomeUpdate(req, parseInt(transaction.amount) * -1);
             await userExpenseUpdate(req, parseInt(transaction.amount));
           }
-        }
-        if (flagAmount) {
+        } else if (flagAmount) {
           if (transaction.type === "income") {
             await userIncomeUpdate(req, diff);
           } else {
             await userExpenseUpdate(req, diff);
           }
         }
+        //send user id, name, amount, description, category, type, date in response
         res.json({
           _id: updatedEntry._id,
           user: req.user._id,
@@ -304,18 +325,18 @@ tranRouter.get(
 
 //==============SUBSCRIPTION ROUTES==================
 
-//Add Subscription
+//POST create subscription entry with name, amount, cycle, date, type, auto, description
 tranRouter.post("/subscription", protect, async (req, res) => {
   try {
     const { name, amount, description, cycle, date, type, auto } = req.body;
     const subscription = new Transaction({
       name,
       amount,
-      description,
       cycle,
       type,
       auto,
       date,
+      description,
       user: req.user._id,
     });
     const newSubscription = await subscription.save();
@@ -326,9 +347,10 @@ tranRouter.post("/subscription", protect, async (req, res) => {
   }
 });
 
-//GET Subscriptions
+//GET all subscription entry using user id and type from req.user
 tranRouter.get("/subscription", protect, async (req, res) => {
   try {
+    //find all entries with user id and type of subscription and sort by date
     const obj = await Transaction.find({
       $and: [{ user: req.user._id }, { type: "subscription" }],
     }).sort({ createdAt: -1 });
@@ -343,16 +365,25 @@ tranRouter.get("/subscription", protect, async (req, res) => {
   }
 });
 
+//Update subscription entry by id with name, amount, cycle, date, type, auto, description from req.body
+//same as update entry
 tranRouter.put("/subscription/:id", protect, async (req, res) => {
   try {
     const subscription = await Transaction.findById(req.params.id);
+    //Check if subscription exists to avoid error
     if (subscription) {
       subscription.name = req.body.name || subscription.name;
-      //Amount Flag
-      const flagAmount = transaction.amount !== req.body.amount;
+      //update all entries with new data from req.body
+      //if data is not present then use old data
+      // name, amount, date, category, type, description
+      const flagAmount = subscription.amount !== req.body.amount;
+
+      //Check if amount is changed and not equal to old amount then update income or expense
+      //if change then calculate difference of old and new amount and update income or expense
       const diff = flagAmount
-        ? req.body.amount - parseInt(transaction.amount)
+        ? req.body.amount - parseInt(subscription.amount)
         : 0;
+
       subscription.amount = req.body.amount || subscription.amount;
       subscription.description =
         req.body.description || subscription.description;
@@ -363,6 +394,8 @@ tranRouter.put("/subscription/:id", protect, async (req, res) => {
       if (req.body.date) {
         subscription.date = req.body.date;
       }
+
+      //Now save the updated subscription in transaction model
       const updatedSubscription = await subscription.save(); //Save
       if (flagAmount) {
         await userExpenseUpdate(req, diff);
@@ -388,9 +421,10 @@ tranRouter.put("/subscription/:id", protect, async (req, res) => {
   }
 });
 
-//Delete Subscription
+//Delete subscription entry by id
 tranRouter.delete("/subscription/:id", protect, async (req, res) => {
   try {
+    const subscription = await Transaction.findById(req.params.id);
     Transaction.deleteOne({ _id: req.params.id })
       .then((obj) => {
         //Checks Deleted by Count
